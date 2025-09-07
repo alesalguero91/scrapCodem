@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 set -o errexit
 
-echo "🚀 Iniciando build optimizado para Render..."
+echo "🚀 Iniciando build para Render..."
 
-# Instalar Chrome y dependencias del sistema
-echo "📦 Instalando Chrome y dependencias..."
+# Instalar dependencias del sistema para Chrome
 apt-get update
 apt-get install -y --no-install-recommends \
     wget \
@@ -26,30 +25,24 @@ apt-get install -y --no-install-recommends \
     libxi6 \
     libxrandr2 \
     libxrender1 \
-    libxss1 \
     libxtst6 \
     libasound2
 
 # Instalar Chrome
-echo "🌐 Instalando Google Chrome..."
 wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
 echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
 apt-get update
 apt-get install -y google-chrome-stable
 
-# Limpiar cache para reducir tamaño
-echo "🧹 Limpiando cache..."
+# Limpiar cache para ahorrar espacio
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 
-# Instalar dependencias de Python
-echo "🐍 Instalando dependencias Python..."
+# Instalar dependencias Python
 pip install --upgrade pip
-pip install --no-cache-dir -r requirements.txt
+pip install -r requirements.txt
 
-# Configuración de Django
-echo "⚙️ Configurando Django..."
-python manage.py collectstatic --no-input --clear
-python manage.py migrate --no-input
+# Configurar static files (si es necesario)
+python manage.py collectstatic --no-input
 
 echo "✅ Build completado exitosamente!"
