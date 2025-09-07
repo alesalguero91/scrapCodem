@@ -1,1 +1,1 @@
-web: gunicorn ansesScrapper.wsgi:application --timeout 90 --workers 1 --threads 2
+web: gunicorn ansesScrapper.wsgi:application --timeout 90 --workers 1 --threads 2web: gunicorn ansesScrapper.wsgi:application --timeout 120 --workers 1
