@@ -19,4 +19,4 @@ pip install -r requirements.txt
 # Configurar static files
 python manage.py collectstatic --no-input
 
-echo "✅ Build completado! WebDriver Manager manejará Chrome automáticamente."
+echo "✅ Build completado! WebDriver Manager manejará Chrome automáticamente." 
