@@ -1,0 +1,1 @@
+web: gunicorn tu_proyecto.wsgi:application --timeout 90 --workers 1 --threads 2 --preload
