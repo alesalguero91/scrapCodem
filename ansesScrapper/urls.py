@@ -25,3 +25,4 @@ urlpatterns = [
     path('ping/', views.ping, name="ping"),
     path('consultar-anses/', views.consultar_anses, name='consultar_anses'),
 ]
+ 
