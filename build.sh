@@ -2,11 +2,13 @@
 set -o errexit
 
 echo "🚀 Iniciando build para Render..."
+echo "📦 Instalando dependencias del sistema..."
 
-# Instalar Chrome y dependencias
+# Actualizar e instalar dependencias necesarias
 apt-get update
 apt-get install -y --no-install-recommends \
-    wget \
+    ca-certificates \
+    curl \
     gnupg \
     libxss1 \
     libappindicator1 \
@@ -28,21 +30,25 @@ apt-get install -y --no-install-recommends \
     libxtst6 \
     libasound2
 
-# Instalar Chrome
-wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
-echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
-apt-get update
-apt-get install -y google-chrome-stable
+# Descargar e instalar Chrome directamente
+echo "🌐 Instalando Google Chrome..."
+curl -o google-chrome-stable.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+apt-get install -y ./google-chrome-stable.deb
+rm -f google-chrome-stable.deb
 
-# Limpiar cache
+# Verificar instalación
+echo "✅ Chrome instalado: $(google-chrome --version)"
+
+# Limpiar cache para ahorrar espacio
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 
 # Instalar dependencias Python
+echo "🐍 Instalando dependencias Python..."
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# Configurar static files
+# Configurar static files (si es necesario)
 python manage.py collectstatic --no-input
 
-echo "✅ Build completado!"
+echo "🎉 Build completado exitosamente!"
