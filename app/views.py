@@ -3,22 +3,26 @@ import os
 import time
 import random
 import re
+import signal
 import PyPDF2
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.conf import settings
 from django.core.cache import cache
-import undetected_chromedriver as uc
-from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
+from webdriver_manager.chrome import ChromeDriverManager
+from bs4 import BeautifulSoup
 
 def get_chrome_options():
-    """Crear nueva configuración de Chrome para cada instancia"""
-    options = uc.ChromeOptions()
+    """Crear nueva configuración de Chrome optimizada para Render"""
+    options = Options()
     
     # Configuración optimizada para Render
     options.add_argument('--headless=new')
@@ -58,6 +62,13 @@ def get_chrome_options():
 @csrf_exempt
 @require_POST
 def consultar_anses(request):
+    # Configurar timeout de 25 segundos máximo
+    def timeout_handler(signum, frame):
+        raise TimeoutError("Tiempo de ejecución excedido")
+    
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(25)
+    
     try:
         # Obtener datos del request
         data = json.loads(request.body)
@@ -75,20 +86,21 @@ def consultar_anses(request):
         if cached_data:
             return JsonResponse(cached_data)
         
-        # Configurar driver con nuevas opciones cada vez
+        # Configurar driver optimizado
         options = get_chrome_options()
-        driver = uc.Chrome(options=options)
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
         
         try:
             # Configurar timeouts optimizados
-            driver.set_page_load_timeout(25)
-            driver.set_script_timeout(20)
+            driver.set_page_load_timeout(15)
+            driver.set_script_timeout(12)
             
             # Navegación principal
             driver.get("https://servicioswww.anses.gob.ar/ooss2/")
             
             identidad_limpia = str(identidad).replace("-", "").replace("_", "")
-            wait = WebDriverWait(driver, 12)
+            wait = WebDriverWait(driver, 8)
             
             # Ingresar DNI
             input_dni = wait.until(EC.presence_of_element_located((By.ID, "ContentPlaceHolder1_txtDoc")))
@@ -99,7 +111,7 @@ def consultar_anses(request):
             # Click en botón
             botonAceptar = wait.until(EC.element_to_be_clickable((By.ID, "ContentPlaceHolder1_Button1")))
             botonAceptar.click()
-            time.sleep(1.5)
+            time.sleep(1.0)
             
             # Obtener datos personales
             soup = BeautifulSoup(driver.page_source, "html.parser")
@@ -153,12 +165,20 @@ def consultar_anses(request):
                 driver.quit()
             except:
                 pass
-    
+            
+    except TimeoutError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Timeout: La consulta tardó demasiado (más de 25 segundos)'
+        })
     except Exception as e:
         return JsonResponse({
             'success': False,
             'error': f'Error interno del servidor: {str(e)}'
         })
+    finally:
+        # Desactivar timeout
+        signal.alarm(0)
 
 def obtener_info_pdf(driver, wait):
     """Función optimizada para obtener info del PDF"""
@@ -183,7 +203,7 @@ def obtener_info_pdf(driver, wait):
         
         if imprimir_exitoso:
             # Esperar descarga reducida
-            time.sleep(5)
+            time.sleep(4)
             
             # Buscar PDF
             download_folder = os.path.join(settings.BASE_DIR, "descargas_anses")
@@ -227,7 +247,7 @@ def obtener_info_negativa(driver, cuit, dni):
             # Navegar a página de negativa
             driver.get("https://servicioswww.anses.gob.ar/censite/index.aspx")
             
-            wait = WebDriverWait(driver, 8)
+            wait = WebDriverWait(driver, 6)
             
             # Rellenar formulario rápido
             input_part1 = wait.until(EC.presence_of_element_located((By.ID, "txtCuitPre")))
@@ -244,7 +264,7 @@ def obtener_info_negativa(driver, cuit, dni):
             # Click y espera reducida
             botonAceptar = wait.until(EC.element_to_be_clickable((By.ID, "btnVerificar")))
             botonAceptar.click()
-            time.sleep(1.0)
+            time.sleep(0.8)
             
             # Obtener tabla
             try:
@@ -266,7 +286,7 @@ def extraer_texto_pdf(ruta_pdf):
             lector_pdf = PyPDF2.PdfReader(archivo)
             texto = ""
             for i, pagina in enumerate(lector_pdf.pages):
-                if i < 3:
+                if i < 2:  # Solo 2 páginas máximo
                     texto += pagina.extract_text() + "\n"
                 else:
                     break

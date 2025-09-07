@@ -1,7 +1,7 @@
 Django==5.2.6
-undetected_chromedriver==3.5.0
 selenium==4.15.0
 beautifulsoup4==4.12.2
 PyPDF2==3.0.1
 gunicorn==21.2.0
 whitenoise==6.6.0
+webdriver-manager==4.0.1

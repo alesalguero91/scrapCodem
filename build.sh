@@ -3,7 +3,7 @@ set -o errexit
 
 echo "🚀 Iniciando build para Render..."
 
-# Instalar dependencias del sistema para Chrome
+# Instalar Chrome y dependencias
 apt-get update
 apt-get install -y --no-install-recommends \
     wget \
@@ -34,7 +34,7 @@ echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /et
 apt-get update
 apt-get install -y google-chrome-stable
 
-# Limpiar cache para ahorrar espacio
+# Limpiar cache
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 
@@ -42,7 +42,7 @@ rm -rf /var/lib/apt/lists/*
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# Configurar static files (si es necesario)
+# Configurar static files
 python manage.py collectstatic --no-input
 
-echo "✅ Build completado exitosamente!"
+echo "✅ Build completado!"
