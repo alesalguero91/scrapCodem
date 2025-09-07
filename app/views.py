@@ -18,14 +18,14 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
 from webdriver_manager.chrome import ChromeDriverManager
-from webdriver_manager.core.utils import ChromeType
+from webdriver_manager.core.os_manager import ChromeType
 from bs4 import BeautifulSoup
 
 def get_chrome_options():
-    """Crear configuración optimizada para Chromium en Render"""
+    """Crear configuración optimizada para Chrome en Render"""
     options = Options()
     
-    # Configuración optimizada para Render con Chromium
+    # Configuración optimizada para Render
     options.add_argument('--headless=new')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
@@ -36,9 +36,6 @@ def get_chrome_options():
     options.add_argument('--window-size=1280,720')
     options.add_argument('--single-process')
     options.add_argument('--disable-software-rasterizer')
-    
-    # Especificar uso de Chromium (más confiable en Render)
-    options.binary_location = '/usr/bin/chromium'
     
     # Configuración de descargas
     download_folder = os.path.join(settings.BASE_DIR, "descargas_anses")
@@ -84,11 +81,11 @@ def consultar_anses(request):
         if cached_data:
             return JsonResponse(cached_data)
         
-        # Configurar driver con Chromium
+        # Configurar driver con Chrome
         options = get_chrome_options()
         
-        # Usar webdriver-manager con Chromium (más confiable en Render)
-        service = Service(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install())
+        # Usar webdriver-manager (manejará Chrome automáticamente)
+        service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
         
         try:
@@ -100,7 +97,7 @@ def consultar_anses(request):
             driver.get("https://servicioswww.anses.gob.ar/ooss2/")
             
             identidad_limpia = str(identidad).replace("-", "").replace("_", "")
-            wait = WebDriverWait(driver, 8)  # Timeout reducido
+            wait = WebDriverWait(driver, 8)
             
             # Ingresar DNI
             input_dni = wait.until(EC.presence_of_element_located((By.ID, "ContentPlaceHolder1_txtDoc")))
@@ -111,7 +108,7 @@ def consultar_anses(request):
             # Click en botón de consulta
             botonAceptar = wait.until(EC.element_to_be_clickable((By.ID, "ContentPlaceHolder1_Button1")))
             botonAceptar.click()
-            time.sleep(1.0)  # Espera reducida
+            time.sleep(1.0)
             
             # Obtener datos personales
             soup = BeautifulSoup(driver.page_source, "html.parser")
@@ -130,7 +127,7 @@ def consultar_anses(request):
             # Intentar obtener información adicional del PDF
             cuit_empleador, situacion_revista, empresa = obtener_info_pdf(driver, wait)
             
-            # Intentar obtener información de negativa (optimizado)
+            # Intentar obtener información de negativa
             tabla_negativa = obtener_info_negativa(driver, cuit_text, dni_text)
             
             # Preparar respuesta
@@ -145,7 +142,7 @@ def consultar_anses(request):
                 'negativa': tabla_negativa
             }
             
-            # Cachear por 1 hora para evitar scraping repetido
+            # Cachear por 1 hora
             cache.set(cache_key, response_data, timeout=3600)
             
             return JsonResponse(response_data)
@@ -203,10 +200,9 @@ def obtener_info_pdf(driver, wait):
                 imprimir_exitoso = False
         
         if imprimir_exitoso:
-            # Esperar descarga reducida
             time.sleep(4)
             
-            # Buscar PDF en la carpeta de descargas
+            # Buscar PDF
             download_folder = os.path.join(settings.BASE_DIR, "descargas_anses")
             downloaded_files = os.listdir(download_folder)
             archivos_pdf = [f for f in downloaded_files if f.lower().endswith('.pdf')]
@@ -224,7 +220,7 @@ def obtener_info_pdf(driver, wait):
                 if situacion_match:
                     situacion_revista = situacion_match.group(1).strip()
                 
-                # Limpiar archivo después de usarlo
+                # Limpiar archivo
                 try:
                     os.remove(ruta_pdf)
                 except:
@@ -243,12 +239,12 @@ def obtener_info_negativa(driver, cuit, dni):
         if len(cuit_limpio) >= 13:
             cuit_part1 = cuit_limpio[:2]
             cuit_part2 = dni
-            cuit_part3 = cuit_limpio[10:11]  # Dígito verificador
+            cuit_part3 = cuit_limpio[10:11]
             
             # Navegar a página de negativa
             driver.get("https://servicioswww.anses.gob.ar/censite/index.aspx")
             
-            wait = WebDriverWait(driver, 6)  # Timeout reducido
+            wait = WebDriverWait(driver, 6)
             
             # Rellenar formulario rápido
             input_part1 = wait.until(EC.presence_of_element_located((By.ID, "txtCuitPre")))
@@ -267,7 +263,7 @@ def obtener_info_negativa(driver, cuit, dni):
             botonAceptar.click()
             time.sleep(0.8)
             
-            # Obtener tabla de negativa
+            # Obtener tabla
             try:
                 tabla_element = wait.until(EC.presence_of_element_located((By.ID, "Grilla")))
                 return tabla_element.text.strip()
@@ -286,9 +282,8 @@ def extraer_texto_pdf(ruta_pdf):
         with open(ruta_pdf, 'rb') as archivo:
             lector_pdf = PyPDF2.PdfReader(archivo)
             texto = ""
-            # Leer solo primeras páginas (las importantes)
             for i, pagina in enumerate(lector_pdf.pages):
-                if i < 2:  # Máximo 2 páginas
+                if i < 2:
                     texto += pagina.extract_text() + "\n"
                 else:
                     break
