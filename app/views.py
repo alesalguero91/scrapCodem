@@ -18,13 +18,14 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
 from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.core.utils import ChromeType
 from bs4 import BeautifulSoup
 
 def get_chrome_options():
-    """Crear nueva configuración de Chrome optimizada para Render"""
+    """Crear configuración optimizada para Chromium en Render"""
     options = Options()
     
-    # Configuración optimizada para Render
+    # Configuración optimizada para Render con Chromium
     options.add_argument('--headless=new')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
@@ -35,12 +36,9 @@ def get_chrome_options():
     options.add_argument('--window-size=1280,720')
     options.add_argument('--single-process')
     options.add_argument('--disable-software-rasterizer')
-    options.add_argument('--disable-features=VizDisplayCompositor')
-    options.add_argument('--disable-background-timer-throttling')
-    options.add_argument('--disable-backgrounding-occluded-windows')
-    options.add_argument('--disable-renderer-backgrounding')
-    options.add_argument('--memory-pressure-off')
-    options.add_argument('--disable-ipc-flooding-protection')
+    
+    # Especificar uso de Chromium (más confiable en Render)
+    options.binary_location = '/usr/bin/chromium'
     
     # Configuración de descargas
     download_folder = os.path.join(settings.BASE_DIR, "descargas_anses")
@@ -62,11 +60,11 @@ def get_chrome_options():
 @csrf_exempt
 @require_POST
 def consultar_anses(request):
-    # Configurar timeout de 25 segundos máximo
+    # Configurar timeout de 25 segundos máximo para Render
     def timeout_handler(signum, frame):
         raise TimeoutError("Tiempo de ejecución excedido")
     
-    signal.signal(signal.SIGALRM, timeout_handler)
+    original_handler = signal.signal(signal.SIGALRM, timeout_handler)
     signal.alarm(25)
     
     try:
@@ -86,21 +84,23 @@ def consultar_anses(request):
         if cached_data:
             return JsonResponse(cached_data)
         
-        # Configurar driver optimizado
+        # Configurar driver con Chromium
         options = get_chrome_options()
-        service = Service(ChromeDriverManager().install())
+        
+        # Usar webdriver-manager con Chromium (más confiable en Render)
+        service = Service(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install())
         driver = webdriver.Chrome(service=service, options=options)
         
         try:
-            # Configurar timeouts optimizados
+            # Configurar timeouts optimizados para Render
             driver.set_page_load_timeout(15)
             driver.set_script_timeout(12)
             
-            # Navegación principal
+            # Navegación principal a ANSES
             driver.get("https://servicioswww.anses.gob.ar/ooss2/")
             
             identidad_limpia = str(identidad).replace("-", "").replace("_", "")
-            wait = WebDriverWait(driver, 8)
+            wait = WebDriverWait(driver, 8)  # Timeout reducido
             
             # Ingresar DNI
             input_dni = wait.until(EC.presence_of_element_located((By.ID, "ContentPlaceHolder1_txtDoc")))
@@ -108,10 +108,10 @@ def consultar_anses(request):
             input_dni.send_keys(identidad_limpia)
             time.sleep(random.uniform(0.1, 0.3))
             
-            # Click en botón
+            # Click en botón de consulta
             botonAceptar = wait.until(EC.element_to_be_clickable((By.ID, "ContentPlaceHolder1_Button1")))
             botonAceptar.click()
-            time.sleep(1.0)
+            time.sleep(1.0)  # Espera reducida
             
             # Obtener datos personales
             soup = BeautifulSoup(driver.page_source, "html.parser")
@@ -145,7 +145,7 @@ def consultar_anses(request):
                 'negativa': tabla_negativa
             }
             
-            # Cachear por 1 hora
+            # Cachear por 1 hora para evitar scraping repetido
             cache.set(cache_key, response_data, timeout=3600)
             
             return JsonResponse(response_data)
@@ -177,7 +177,8 @@ def consultar_anses(request):
             'error': f'Error interno del servidor: {str(e)}'
         })
     finally:
-        # Desactivar timeout
+        # Restaurar handler y desactivar timeout
+        signal.signal(signal.SIGALRM, original_handler)
         signal.alarm(0)
 
 def obtener_info_pdf(driver, wait):
@@ -205,7 +206,7 @@ def obtener_info_pdf(driver, wait):
             # Esperar descarga reducida
             time.sleep(4)
             
-            # Buscar PDF
+            # Buscar PDF en la carpeta de descargas
             download_folder = os.path.join(settings.BASE_DIR, "descargas_anses")
             downloaded_files = os.listdir(download_folder)
             archivos_pdf = [f for f in downloaded_files if f.lower().endswith('.pdf')]
@@ -223,7 +224,7 @@ def obtener_info_pdf(driver, wait):
                 if situacion_match:
                     situacion_revista = situacion_match.group(1).strip()
                 
-                # Limpiar archivo
+                # Limpiar archivo después de usarlo
                 try:
                     os.remove(ruta_pdf)
                 except:
@@ -242,12 +243,12 @@ def obtener_info_negativa(driver, cuit, dni):
         if len(cuit_limpio) >= 13:
             cuit_part1 = cuit_limpio[:2]
             cuit_part2 = dni
-            cuit_part3 = cuit_limpio[10:11]
+            cuit_part3 = cuit_limpio[10:11]  # Dígito verificador
             
             # Navegar a página de negativa
             driver.get("https://servicioswww.anses.gob.ar/censite/index.aspx")
             
-            wait = WebDriverWait(driver, 6)
+            wait = WebDriverWait(driver, 6)  # Timeout reducido
             
             # Rellenar formulario rápido
             input_part1 = wait.until(EC.presence_of_element_located((By.ID, "txtCuitPre")))
@@ -266,7 +267,7 @@ def obtener_info_negativa(driver, cuit, dni):
             botonAceptar.click()
             time.sleep(0.8)
             
-            # Obtener tabla
+            # Obtener tabla de negativa
             try:
                 tabla_element = wait.until(EC.presence_of_element_located((By.ID, "Grilla")))
                 return tabla_element.text.strip()
@@ -285,8 +286,9 @@ def extraer_texto_pdf(ruta_pdf):
         with open(ruta_pdf, 'rb') as archivo:
             lector_pdf = PyPDF2.PdfReader(archivo)
             texto = ""
+            # Leer solo primeras páginas (las importantes)
             for i, pagina in enumerate(lector_pdf.pages):
-                if i < 2:  # Solo 2 páginas máximo
+                if i < 2:  # Máximo 2 páginas
                     texto += pagina.extract_text() + "\n"
                 else:
                     break
@@ -294,5 +296,22 @@ def extraer_texto_pdf(ruta_pdf):
     except Exception as e:
         return f"Error al leer PDF: {str(e)}"
 
+def home(request):
+    """Vista para la página principal"""
+    return JsonResponse({
+        "message": "Servicio de consulta ANSES", 
+        "status": "active",
+        "endpoints": {
+            "POST /consultar-anses/": "Consultar datos ANSES por DNI",
+            "GET /ping/": "Verificar estado del servicio"
+        },
+        "version": "1.0"
+    })
+
 def ping(request):
-    return JsonResponse({"status": "ok", "message": "Servicio funcionando"})
+    """Endpoint para verificar que el servicio está funcionando"""
+    return JsonResponse({
+        "status": "ok", 
+        "message": "Servicio funcionando correctamente",
+        "timestamp": time.time()
+    })
